@@ -29,6 +29,7 @@
 #include "Common/PathTools.h"
 #include "Common/Util.h"
 #include "crypto/hash.h"
+#include "CryptoNoteCore/CryptoNoteTools.h"
 #include "CryptoNoteCore/Core.h"
 #include "CryptoNoteCore/Currency.h"
 #include "CryptoNoteCore/DatabaseBlockchainCache.h"
@@ -66,9 +67,42 @@ namespace
   const command_line::arg_descriptor<bool>        arg_console     = {"no-console", "Disable daemon console commands"};
   const command_line::arg_descriptor<bool>        arg_testnet_on  = {"testnet", "Used to deploy test nets. Checkpoints and hardcoded seeds are ignored, "
     "network id is changed. Use it with --data-dir flag. The wallet must be launched with --testnet flag.", false};
+  const command_line::arg_descriptor<bool>        arg_print_genesis_tx = { "print-genesis-tx", "Prints genesis block tx hex to insert it to config and exits" };
+  const command_line::arg_descriptor<std::vector<std::string>> arg_genesis_block_reward_address = { "genesis-block-reward-address", "" };
 }
 
 bool command_line_preprocessor(const boost::program_options::variables_map& vm, LoggerRef& logger);
+
+void print_genesis_tx_hex(const po::variables_map& vm, LoggerManager& logManager) {
+  std::vector<CryptoNote::AccountPublicAddress> targets;
+  auto genesis_block_reward_addresses = command_line::get_arg(vm, arg_genesis_block_reward_address);
+  CryptoNote::CurrencyBuilder currencyBuilder(logManager);
+  CryptoNote::Currency currency = currencyBuilder.currency();
+  for (const auto& address_string : genesis_block_reward_addresses) {
+    CryptoNote::AccountPublicAddress address;
+    if (!currency.parseAccountAddressString(address_string, address)) {
+      std::cout << "Failed to parse address: " << address_string << std::endl;
+      return;
+    }
+    targets.emplace_back(std::move(address));
+  }
+  if (targets.empty()) {
+    if (CryptoNote::parameters::GENESIS_BLOCK_REWARD > 0) {
+      std::cout << "Error: genesis block reward addresses are not defined" << std::endl;
+    } else {
+    CryptoNote::Transaction tx = CryptoNote::CurrencyBuilder(logManager).generateGenesisTransaction();
+    std::string tx_hex = Common::toHex(CryptoNote::toBinaryArray(tx));
+    std::cout << "Add/modify this line into your coin configuration file as is: " << std::endl;
+    std::cout << "\"GENESIS_COINBASE_TX_HEX\":\"" << tx_hex << "\"," << std::endl;
+    }
+  } else {
+      CryptoNote::Transaction tx = CryptoNote::CurrencyBuilder(logManager).generateGenesisTransaction(targets);
+      std::string tx_hex = Common::toHex(CryptoNote::toBinaryArray(tx));
+      std::cout << "Add/Modify this line into your coin configuration file as is: " << std::endl;
+      std::cout << "\"GENESIS_COINBASE_TX_HEX\":\"" << tx_hex << "\"," << std::endl;
+  }
+  return;
+}
 
 JsonValue buildLoggerConfiguration(Level level, const std::string& logfile) {
   JsonValue loggerConfiguration(JsonValue::OBJECT);
@@ -115,6 +149,9 @@ int main(int argc, char* argv[])
     command_line::add_arg(desc_cmd_sett, arg_console);
     command_line::add_arg(desc_cmd_sett, arg_testnet_on);
 
+    command_line::add_arg(desc_cmd_sett, arg_print_genesis_tx);
+    command_line::add_arg(desc_cmd_sett, arg_genesis_block_reward_address);
+
     RpcServerConfig::initOptions(desc_cmd_sett);
     NetNodeConfig::initOptions(desc_cmd_sett);
     DataBaseConfig::initOptions(desc_cmd_sett);
@@ -132,6 +169,11 @@ int main(int argc, char* argv[])
       {
         std::cout << CryptoNote::CRYPTONOTE_NAME << " v" << PROJECT_VERSION_LONG << ENDL << ENDL;
         std::cout << desc_options << std::endl;
+        return false;
+      }
+
+      if (command_line::get_arg(vm, arg_print_genesis_tx)) {
+        print_genesis_tx_hex(vm, logManager);
         return false;
       }
 
@@ -187,6 +229,14 @@ int main(int argc, char* argv[])
     //create objects and link them
     CryptoNote::CurrencyBuilder currencyBuilder(logManager);
     currencyBuilder.testnet(testnet_mode);
+
+    try {
+      currencyBuilder.currency();
+    } catch (std::exception&) {
+      std::cout << "GENESIS_COINBASE_TX_HEX constant has an incorrect value. Please launch: " << CryptoNote::CRYPTONOTE_NAME << "d --" << arg_print_genesis_tx.name;
+      return 1;
+    }
+
     CryptoNote::Currency currency = currencyBuilder.currency();
 
     CryptoNote::Checkpoints checkpoints(logManager);

@@ -35,9 +35,10 @@ const uint64_t CRYPTONOTE_BLOCK_FUTURE_TIME_LIMIT            = 60 * 60 * 2;
 const size_t   BLOCKCHAIN_TIMESTAMP_CHECK_WINDOW             = 60;
 
 // MONEY_SUPPLY - total number coins to be generated
-const uint64_t MONEY_SUPPLY									 = UINT64_C(100000000000000000);
-const uint64_t FINAL_SUBSIDY_PER_MINUTE						 = UINT64_C(3000000000);
+const uint64_t MONEY_SUPPLY                                  = UINT64_C(100000000000000000);
+const uint64_t FINAL_SUBSIDY_PER_MINUTE                      = UINT64_C(3000000000);
 const unsigned EMISSION_SPEED_FACTOR                         = 19;
+const uint64_t GENESIS_BLOCK_REWARD                          = UINT64_C(0);
 static_assert(EMISSION_SPEED_FACTOR <= 8 * sizeof(uint64_t), "Bad EMISSION_SPEED_FACTOR");
 
 const size_t   CRYPTONOTE_REWARD_BLOCKS_WINDOW               = 100;
@@ -138,10 +139,10 @@ struct CheckpointData {
   const char* blockId;
 };
 
-const CheckpointData CHECKPOINTS[] = {
-	{ 100, "bc2464fdc211cd28a3fcd9c934b0037a13a29b651e8e979d06f3b1b540b6c7a5" }, // Any checkpoint required to build under MSVC
-  // { 1, "para ke kieres saber esto jajaj salu2" }, // ToDo
+const std::initializer_list<CheckpointData> CHECKPOINTS = { 
+  //{ 100, "para ke kieres saber esto jajaj salu2" }, // ToDo
 };
+
 }
 
 #define ALLOW_DEBUG_COMMANDS
