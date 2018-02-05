@@ -71,8 +71,9 @@ const command_line::arg_descriptor<std::string> arg_generate_new_wallet = { "gen
 const command_line::arg_descriptor<std::string> arg_daemon_address = { "daemon-address", "Use daemon instance at <host>:<port>", "" };
 const command_line::arg_descriptor<std::string> arg_daemon_host = { "daemon-host", "Use daemon instance at host <arg> instead of localhost", "" };
 const command_line::arg_descriptor<std::string> arg_password = { "password", "Wallet password", "", true };
-const command_line::arg_descriptor<uint16_t> arg_daemon_port = { "daemon-port", "Use daemon instance at port <arg> instead of 8081", 0 };
-const command_line::arg_descriptor<uint32_t> arg_log_level = { "set_log", "", INFO, true };
+const command_line::arg_descriptor<uint16_t>    arg_daemon_port = { "daemon-port", "Use daemon instance at port <arg> instead of 8081", 0 };
+const command_line::arg_descriptor<uint32_t>    arg_log_level = { "set_log", "", INFO, true };
+const command_line::arg_descriptor<bool>        arg_SYNC_FROM_ZERO  = {"SYNC_FROM_ZERO", "Sync from block 0. Use for premine wallet or brainwallet", false};
 const command_line::arg_descriptor<bool> arg_testnet = { "testnet", "Used to deploy test nets. The daemon must be launched with --testnet flag", false };
 const command_line::arg_descriptor< std::vector<std::string> > arg_command = { "command", "" };
 const command_line::arg_descriptor<std::string> arg_restore_view = { "restore-view-key", "Specify the View Key to re-generate an existing wallet", ""};
@@ -566,6 +567,10 @@ bool simple_wallet::init(const boost::program_options::variables_map& vm) {
   }
 
   std::string walletFileName;
+  sync_from_zero = command_line::get_arg(vm, arg_SYNC_FROM_ZERO);
+  if (sync_from_zero) {
+    sync_from_height = 0;
+  }
   if (!m_generate_new.empty() || !m_import_new.empty()) {
     std::string ignoredString;
     if (!m_generate_new.empty()) {
@@ -616,6 +621,10 @@ bool simple_wallet::init(const boost::program_options::variables_map& vm) {
     return false;
   }
 
+  sync_from_zero = command_line::get_arg(vm, arg_SYNC_FROM_ZERO);
+  if (sync_from_zero) {
+    sync_from_height = 0;
+  }
   if (!m_generate_new.empty()) {
     std::string walletAddressFile = prepareWalletAddressFilename(m_generate_new);
     boost::system::error_code ignore;
@@ -687,7 +696,7 @@ bool simple_wallet::init(const boost::program_options::variables_map& vm) {
     }
   } else {
     m_wallet.reset(new WalletLegacy(m_currency, *m_node));
-
+    m_wallet->syncAll(sync_from_zero, 0);
     try {
       m_wallet_file = tryToOpenWalletOrLoadKeysOrThrow(logger, m_wallet, m_wallet_file_arg, pwd_container.password());
     } catch (const std::exception& e) {
@@ -739,6 +748,7 @@ bool simple_wallet::new_wallet(const std::string &wallet_file, const std::string
   try {
     m_initResultPromise.reset(new std::promise<std::error_code>());
     std::future<std::error_code> f_initError = m_initResultPromise->get_future();
+    m_wallet->syncAll(sync_from_zero, 0);
     m_wallet->initAndGenerate(password);
     auto initError = f_initError.get();
     m_initResultPromise.reset(nullptr);
@@ -865,7 +875,20 @@ bool simple_wallet::reset(const std::vector<std::string> &args) {
     m_walletSynchronized = false;
   }
 
-  m_wallet->reset();
+  if(0 == args.size()) {
+    success_msg_writer(true) << "Resetting wallet from block height 0";
+    m_wallet->syncAll(true, 0);
+    m_wallet->reset();
+  } else {
+    uint64_t height = 0;
+    bool ok = Common::fromString(args[0], height);
+    if (ok) {
+      success_msg_writer(true) << "Resetting wallet from block height " << height;
+      m_wallet->syncAll(true, height);
+      m_wallet->reset(height);
+    }
+  }
+  
   success_msg_writer(true) << "Reset completed successfully.";
 
   std::unique_lock<std::mutex> lock(m_walletSynchronizedMutex);
@@ -1221,6 +1244,7 @@ int main(int argc, char* argv[]) {
   command_line::add_arg(desc_params, arg_log_level);
   command_line::add_arg(desc_params, arg_testnet);
   Tools::wallet_rpc_server::init_options(desc_params);
+  command_line::add_arg(desc_params, arg_SYNC_FROM_ZERO);
 
   po::positional_options_description positional_options;
   positional_options.add(arg_command.name, -1);
