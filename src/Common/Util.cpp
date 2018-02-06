@@ -302,14 +302,14 @@ std::string get_nix_version_display_string()
   std::string getDefaultDataDirectory()
   {
     //namespace fs = boost::filesystem;
-    // Windows < Vista: C:\Documents and Settings\Username\Application Data\CRYPTONOTE_NAME
-    // Windows >= Vista: C:\Users\Username\AppData\Roaming\CRYPTONOTE_NAME
+    // Windows < Vista: C:\Program Files\CRYPTONOTE_NAME
+    // Windows >= Vista: C:\Program Files\CRYPTONOTE_NAME
     // Mac: ~/Library/Application Support/CRYPTONOTE_NAME
     // Unix: ~/.CRYPTONOTE_NAME
     std::string config_folder;
 #ifdef WIN32
     // Windows
-    config_folder = get_special_folder_path(CSIDL_APPDATA, true) + "/" + CryptoNote::CRYPTONOTE_NAME;
+    config_folder = get_special_folder_path(CSIDL_PROGRAM_FILES, true) + "/" + CryptoNote::CRYPTONOTE_NAME;
 #else
     std::string pathRet;
     char* pszHome = getenv("HOME");
