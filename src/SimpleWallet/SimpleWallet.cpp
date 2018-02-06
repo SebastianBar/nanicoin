@@ -888,7 +888,7 @@ bool simple_wallet::reset(const std::vector<std::string> &args) {
       m_wallet->reset(height);
     }
   }
-  
+
   success_msg_writer(true) << "Reset completed successfully.";
 
   std::unique_lock<std::mutex> lock(m_walletSynchronizedMutex);
@@ -1190,8 +1190,7 @@ bool simple_wallet::run() {
 
   std::cout << std::endl;
 
-  std::string addr_start = m_wallet->getAddress().substr(0, 6);
-  m_consoleHandler.start(false, "[wallet " + addr_start + "]: ", Common::Console::Color::BrightYellow);
+  m_consoleHandler.start(false, "[" + CRYPTONOTE_NAME + "]: ", Common::Console::Color::BrightYellow);
   return true;
 }
 //----------------------------------------------------------------------------------------------------
