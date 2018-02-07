@@ -434,6 +434,19 @@ bool Core::queryBlocksLite(const std::vector<Crypto::Hash>& knownBlockHashes, ui
 
     startIndex = findBlockchainSupplement(knownBlockHashes); // throws
 
+    // Stops bug where wallets fail to sync, because timestamps have been adjusted after syncronisation.
+    // check for a query of the blocks where the block index is non-zero, but the timestamp is zero
+    // indicating that the originator did not know the internal time of the block, but knew which block
+    // was wanted by index.  Fullfill this by getting the time of m_blocks[startIndex].timestamp.
+
+    if (startIndex > 0 && timestamp == 0) {
+      if (startIndex <= mainChain->getTopBlockIndex()) {
+        RawBlock block = mainChain->getBlockByIndex(startIndex);
+        auto blockTemplate = extractBlockTemplate(block);
+        timestamp = blockTemplate.timestamp;
+      }
+    }
+
     fullOffset = mainChain->getTimestampLowerBoundBlockIndex(timestamp);
     if (fullOffset < startIndex) {
       fullOffset = startIndex;
@@ -517,7 +530,7 @@ Difficulty Core::getDifficultyForNextBlock() const {
   size_t blocksCount = std::min(static_cast<size_t>(topBlockIndex), currency.difficultyBlocksCount(topBlockIndex));
 
   auto timestamps = mainChain->getLastTimestamps(blocksCount);
-  auto difficulties = mainChain->getLastCumulativeDifficulties(blocksCount);  
+  auto difficulties = mainChain->getLastCumulativeDifficulties(blocksCount);
 
   return currency.nextDifficulty(blockMajorVersion, timestamps, difficulties);
 }
@@ -1225,7 +1238,7 @@ std::error_code Core::validateTransaction(const CachedTransaction& cachedTransac
                                           IBlockchainCache* cache, uint64_t& fee, uint32_t blockIndex) {
   // TransactionValidatorState currentState;
   const auto& transaction = cachedTransaction.getTransaction();
-  auto error = validateSemantic(transaction, fee);
+auto error = validateSemantic(transaction, fee, blockIndex);
   if (error != error::TransactionValidationError::VALIDATION_SUCCESS) {
     return error;
   }
@@ -1309,7 +1322,7 @@ std::error_code Core::validateTransaction(const CachedTransaction& cachedTransac
 
         ++outputKeyIndex;
       }
-
+    
     } else {
       assert(false);
       return error::TransactionValidationError::INPUT_UNKNOWN_TYPE;
@@ -1321,7 +1334,7 @@ std::error_code Core::validateTransaction(const CachedTransaction& cachedTransac
   return error::TransactionValidationError::VALIDATION_SUCCESS;
 }
 
-std::error_code Core::validateSemantic(const Transaction& transaction, uint64_t& fee) {
+std::error_code Core::validateSemantic(const Transaction& transaction, uint64_t& fee, uint32_t blockIndex) {
   if (transaction.inputs.empty()) {
     return error::TransactionValidationError::EMPTY_INPUTS;
   }
@@ -1358,6 +1371,11 @@ std::error_code Core::validateSemantic(const Transaction& transaction, uint64_t&
     summaryOutputAmount += output.amount;
   }
 
+    // parameters used for the additional key_image check
+    static const Crypto::KeyImage Z = { {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 } };
+    static const Crypto::KeyImage I = { {0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 } };
+    static const Crypto::KeyImage L = { {0xed, 0xd3, 0xf5, 0x5c, 0x1a, 0x63, 0x12, 0x58, 0xd6, 0x9c, 0xf7, 0xa2, 0xde, 0xf9, 0xde, 0x14, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10 } };
+
   uint64_t summaryInputAmount = 0;
   std::unordered_set<Crypto::KeyImage> ki;
   std::set<std::pair<uint64_t, uint32_t>> outputsUsage;
@@ -1376,10 +1394,15 @@ std::error_code Core::validateSemantic(const Transaction& transaction, uint64_t&
 
       // outputIndexes are packed here, first is absolute, others are offsets to previous,
       // so first can be zero, others can't
+  // Fix discovered by Monero Lab and suggested by "fluffypony" (bitcointalk.org)
+  if (!(scalarmultKey(in.keyImage, L) == I) && blockIndex > parameters::KEY_IMAGE_CHECKING_BLOCK_INDEX) {
+    return error::TransactionValidationError::INPUT_INVALID_DOMAIN_KEYIMAGES;
+  }
+
       if (std::find(++std::begin(in.outputIndexes), std::end(in.outputIndexes), 0) != std::end(in.outputIndexes)) {
         return error::TransactionValidationError::INPUT_IDENTICAL_OUTPUT_INDEXES;
       }
-    } else if (input.type() == typeid(MultisignatureInput)) {
+      } else if (input.type() == typeid(MultisignatureInput)) {
       const MultisignatureInput& in = boost::get<MultisignatureInput>(input);
       amount = in.amount;
       if (!outputsUsage.insert(std::make_pair(in.amount, in.outputIndex)).second) {

@@ -1190,7 +1190,7 @@ bool simple_wallet::run() {
 
   std::cout << std::endl;
 
-  m_consoleHandler.start(false, "[" + CRYPTONOTE_NAME + "]: ", Common::Console::Color::BrightYellow);
+  m_consoleHandler.start(false, "[SimpleWallet]: ", Common::Console::Color::BrightYellow);
   return true;
 }
 //----------------------------------------------------------------------------------------------------
