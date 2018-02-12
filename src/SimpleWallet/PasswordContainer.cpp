@@ -80,6 +80,7 @@ namespace Tools
     {
       std::string mandatory = force_input ? " (mandatory)" : "";
       do
+      {
         std::cout << "Password" << mandatory << ": ";
         r = read_from_tty();
       } while (force_input && m_password.empty());
