@@ -1203,10 +1203,10 @@ bool simple_wallet::print_address(const std::vector<std::string> &args/* = std::
 //----------------------------------------------------------------------------------------------------
 bool simple_wallet::print_keys(const std::vector<std::string> &args/* = std::vector<std::string>()*/) {
 	AccountKeys keys;
-	m_wallet->getAccountKeys(keys);	
-	std::cout << "Spend secret key: " << Common::podToHex(keys.spendSecretKey) << std::endl;
+	m_wallet->getAccountKeys(keys);
+  std::cout << "Spend secret key: " << Common::podToHex(keys.spendSecretKey) << std::endl;
   std::cout << "View secret key: " <<  Common::podToHex(keys.viewSecretKey) << std::endl;
-	return true;
+  return true;
 }
 //----------------------------------------------------------------------------------------------------
 bool simple_wallet::process_command(const std::vector<std::string> &args) {

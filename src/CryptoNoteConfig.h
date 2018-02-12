@@ -132,6 +132,7 @@ const char     P2P_STAT_TRUSTED_PUB_KEY[] = "";
 const char* const SEED_NODES[] = {
 	"seed01.nanicoin.me:22175",
   "seed02.nanicoin.me:22175",
+  "seed03.nanicoin.me:22175",
 };
 
 struct CheckpointData {
