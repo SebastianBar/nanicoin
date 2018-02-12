@@ -602,7 +602,7 @@ bool simple_wallet::init(const boost::program_options::variables_map& vm) {
   Tools::PasswordContainer pwd_container;
   if (command_line::has_arg(vm, arg_password)) {
     pwd_container.password(command_line::get_arg(vm, arg_password));
-  } else if (!pwd_container.read_password()) {
+  } else if (!pwd_container.read_password(!m_generate_new.empty())) { // Force input only when generating a new address
     fail_msg_writer() << "failed to read wallet password";
     return false;
   }
@@ -767,9 +767,7 @@ bool simple_wallet::new_wallet(const std::string &wallet_file, const std::string
     AccountKeys keys;
     m_wallet->getAccountKeys(keys);
 
-    logger(INFO, BRIGHT_WHITE) <<
-      "Generated new wallet: " << m_wallet->getAddress() << std::endl <<
-      "view key: " << Common::podToHex(keys.viewSecretKey);
+    logger(INFO, BRIGHT_WHITE) << "Generated new wallet: " << m_wallet->getAddress() << std::endl;
   }
   catch (const std::exception& e) {
     fail_msg_writer() << "failed to generate new wallet: " << e.what();
@@ -1206,9 +1204,8 @@ bool simple_wallet::print_address(const std::vector<std::string> &args/* = std::
 bool simple_wallet::print_keys(const std::vector<std::string> &args/* = std::vector<std::string>()*/) {
 	AccountKeys keys;
 	m_wallet->getAccountKeys(keys);	
-	success_msg_writer() << "Address: " << m_wallet->getAddress();
-	success_msg_writer() << "Secret spend key: " << keys.spendSecretKey;
-	success_msg_writer() << "Secret view key: " << keys.viewSecretKey;
+	std::cout << "Spend secret key: " << Common::podToHex(keys.spendSecretKey) << std::endl;
+  std::cout << "View secret key: " <<  Common::podToHex(keys.viewSecretKey) << std::endl;
 	return true;
 }
 //----------------------------------------------------------------------------------------------------

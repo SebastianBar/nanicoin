@@ -71,15 +71,18 @@ namespace Tools
     m_empty = true;
   }
 
-  bool PasswordContainer::read_password()
+  bool PasswordContainer::read_password(bool force_input)
   {
     clear();
 
     bool r;
     if (is_cin_tty())
     {
-      std::cout << "password: ";
-      r = read_from_tty();
+      std::string mandatory = force_input ? " (mandatory)" : "";
+      do
+        std::cout << "Password" << mandatory << ": ";
+        r = read_from_tty();
+      } while (force_input && m_password.empty());
     }
     else
     {
@@ -174,7 +177,7 @@ namespace Tools
         std::cout << '*';
       }
     }
-
+    
     ::SetConsoleMode(h_cin, mode_old);
 
     return r;
@@ -239,7 +242,7 @@ namespace Tools
         std::cout << '*';
       }
     }
-
+    
     return true;
   }
 

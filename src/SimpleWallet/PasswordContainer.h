@@ -35,7 +35,7 @@ namespace Tools
     bool empty() const { return m_empty; }
     const std::string& password() const { return m_password; }
     void password(std::string&& val) { m_password = std::move(val); m_empty = false; }
-    bool read_password();
+    bool read_password(bool force_input);
 
   private:
     bool read_from_file();
