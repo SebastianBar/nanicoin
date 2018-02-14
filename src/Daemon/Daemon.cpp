@@ -98,7 +98,7 @@ void print_genesis_tx_hex(const po::variables_map& vm, LoggerManager& logManager
   } else {
       CryptoNote::Transaction tx = CryptoNote::CurrencyBuilder(logManager).generateGenesisTransaction(targets);
       std::string tx_hex = Common::toHex(CryptoNote::toBinaryArray(tx));
-      std::cout << "Add/Modify this line into your coin configuration file as is: " << std::endl;
+      std::cout << "Add/modify this line into your coin configuration file as is: " << std::endl;
       std::cout << "\"GENESIS_COINBASE_TX_HEX\":\"" << tx_hex << "\"," << std::endl;
   }
   return;
