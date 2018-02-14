@@ -428,6 +428,7 @@ bool Core::queryBlocksLite(const std::vector<Crypto::Hash>& knownBlockHashes, ui
   assert(!chainsStorage.empty());
 
   throwIfNotInitialized();
+
   try {
     IBlockchainCache* mainChain = chainsLeaves[0];
     currentIndex = mainChain->getTopBlockIndex();
@@ -461,8 +462,8 @@ bool Core::queryBlocksLite(const std::vector<Crypto::Hash>& knownBlockHashes, ui
     fillQueryBlockShortInfo(fullOffset, currentIndex, BLOCKS_SYNCHRONIZING_DEFAULT_COUNT, entries);
 
     return true;
-  } catch (std::exception&) {
-    // TODO log
+  } catch (std::exception& e) {
+    logger(Logging::ERROR) << "Failed to query blocks: " << e.what();
     return false;
   }
 }
@@ -525,14 +526,15 @@ Difficulty Core::getDifficultyForNextBlock() const {
   IBlockchainCache* mainChain = chainsLeaves[0];
 
   uint32_t topBlockIndex = mainChain->getTopBlockIndex();
-  auto blockMajorVersion = getBlockMajorVersionForHeight(topBlockIndex);
 
-  size_t blocksCount = std::min(static_cast<size_t>(topBlockIndex), currency.difficultyBlocksCount(topBlockIndex));
+  uint8_t nextBlockMajorVersion = getBlockMajorVersionForHeight(topBlockIndex);
+
+  size_t blocksCount = std::min(static_cast<size_t>(topBlockIndex), currency.difficultyBlocksCountByBlockVersion(nextBlockMajorVersion));
 
   auto timestamps = mainChain->getLastTimestamps(blocksCount);
   auto difficulties = mainChain->getLastCumulativeDifficulties(blocksCount);
 
-  return currency.nextDifficulty(blockMajorVersion, timestamps, difficulties);
+  return currency.nextDifficulty(nextBlockMajorVersion, topBlockIndex, timestamps, difficulties);
 }
 
 std::vector<Crypto::Hash> Core::findBlockchainSupplement(const std::vector<Crypto::Hash>& remoteBlockIds,
@@ -627,7 +629,7 @@ std::error_code Core::addBlock(const CachedBlock& cachedBlock, RawBlock&& rawBlo
   }
 
   if (minerReward != reward) {
-    logger(Logging::WARNING) << "Block reward mismatch for block " << (previousBlockIndex + 1) << "  " << cachedBlock.getBlockHash()
+    logger(Logging::WARNING) << "Block reward mismatch for block " << cachedBlock.getBlockHash()
                              << ". Expected reward: " << reward << ", got reward: " << minerReward;
     return error::BlockValidationError::BLOCK_REWARD_MISMATCH;
   }
@@ -1322,7 +1324,7 @@ auto error = validateSemantic(transaction, fee, blockIndex);
 
         ++outputKeyIndex;
       }
-    
+
     } else {
       assert(false);
       return error::TransactionValidationError::INPUT_UNKNOWN_TYPE;
@@ -1402,7 +1404,7 @@ std::error_code Core::validateSemantic(const Transaction& transaction, uint64_t&
       if (std::find(++std::begin(in.outputIndexes), std::end(in.outputIndexes), 0) != std::end(in.outputIndexes)) {
         return error::TransactionValidationError::INPUT_IDENTICAL_OUTPUT_INDEXES;
       }
-      } else if (input.type() == typeid(MultisignatureInput)) {
+    } else if (input.type() == typeid(MultisignatureInput)) {
       const MultisignatureInput& in = boost::get<MultisignatureInput>(input);
       amount = in.amount;
       if (!outputsUsage.insert(std::make_pair(in.amount, in.outputIndex)).second) {

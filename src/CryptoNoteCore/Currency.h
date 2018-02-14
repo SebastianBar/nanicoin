@@ -44,11 +44,13 @@ public:
   uint64_t blockFutureTimeLimit() const { return m_blockFutureTimeLimit; }
 
   uint64_t moneySupply() const { return m_moneySupply; }
-  uint64_t finalSubsidy() const { return m_finalSubsidy; }
   unsigned int emissionSpeedFactor() const { return m_emissionSpeedFactor; }
   uint64_t genesisBlockReward() const { return m_genesisBlockReward; }
 
   size_t rewardBlocksWindow() const { return m_rewardBlocksWindow; }
+  uint32_t zawyDifficultyBlockIndex() const { return m_zawyDifficultyBlockIndex; }
+  size_t zawyDifficultyV2() const { return m_zawyDifficultyV2; }
+  uint8_t zawyDifficultyBlockVersion() const { return m_zawyDifficultyBlockVersion; }
   size_t blockGrantedFullRewardZone() const { return m_blockGrantedFullRewardZone; }
   size_t blockGrantedFullRewardZoneByBlockVersion(uint8_t blockMajorVersion) const;
   size_t minerTxBlobReservedSize() const { return m_minerTxBlobReservedSize; }
@@ -61,11 +63,13 @@ public:
 
   uint64_t difficultyTarget() const { return m_difficultyTarget; }
   size_t difficultyWindow() const { return m_difficultyWindow; }
-  size_t difficultyWindowV2() const { return m_difficultyWindow_v2; }
+  size_t difficultyWindowByBlockVersion(uint8_t blockMajorVersion) const;
   size_t difficultyLag() const { return m_difficultyLag; }
+  size_t difficultyLagByBlockVersion(uint8_t blockMajorVersion) const;
   size_t difficultyCut() const { return m_difficultyCut; }
-  size_t difficultyCutV2() const { return m_difficultyCut_v2; }
-  size_t difficultyBlocksCount(uint32_t height) const;
+  size_t difficultyCutByBlockVersion(uint8_t blockMajorVersion) const;
+  size_t difficultyBlocksCount() const { return m_difficultyWindow + m_difficultyLag; }
+  size_t difficultyBlocksCountByBlockVersion(uint8_t blockMajorVersion) const;
 
   size_t maxBlockSizeInitial() const { return m_maxBlockSizeInitial; }
   uint64_t maxBlockSizeGrowthSpeedNumerator() const { return m_maxBlockSizeGrowthSpeedNumerator; }
@@ -83,7 +87,6 @@ public:
   size_t fusionTxMinInOutCountRatio() const { return m_fusionTxMinInOutCountRatio; }
 
   uint32_t upgradeHeight(uint8_t majorVersion) const;
-  uint8_t  blockVersionByHeight(uint32_t height) const;
   unsigned int upgradeVotingThreshold() const { return m_upgradeVotingThreshold; }
   uint32_t upgradeVotingWindow() const { return m_upgradeVotingWindow; }
   uint32_t upgradeWindow() const { return m_upgradeWindow; }
@@ -121,7 +124,8 @@ public:
   std::string formatAmount(int64_t amount) const;
   bool parseAmount(const std::string& str, uint64_t& amount) const;
 
-  Difficulty nextDifficulty(uint8_t blockMajorVersion, std::vector<uint64_t> timestamps, std::vector<Difficulty> cumulativeDifficulties) const;
+  Difficulty nextDifficulty(std::vector<uint64_t> timestamps, std::vector<Difficulty> cumulativeDifficulties) const;
+  Difficulty nextDifficulty(uint8_t version, uint32_t blockIndex, std::vector<uint64_t> timestamps, std::vector<Difficulty> cumulativeDifficulties) const;
 
   bool checkProofOfWorkV1(Crypto::cn_context& context, const CachedBlock& block, Difficulty currentDifficulty) const;
   bool checkProofOfWorkV2(Crypto::cn_context& context, const CachedBlock& block, Difficulty currentDifficulty) const;
@@ -150,11 +154,13 @@ private:
   uint64_t m_blockFutureTimeLimit;
 
   uint64_t m_moneySupply;
-  uint64_t m_finalSubsidy;
   unsigned int m_emissionSpeedFactor;
   uint64_t m_genesisBlockReward;
 
   size_t m_rewardBlocksWindow;
+  uint32_t m_zawyDifficultyBlockIndex;
+  size_t m_zawyDifficultyV2;
+  uint8_t m_zawyDifficultyBlockVersion;
   size_t m_blockGrantedFullRewardZone;
   size_t m_minerTxBlobReservedSize;
 
@@ -169,12 +175,7 @@ private:
   size_t m_difficultyLag;
   size_t m_difficultyCut;
 
-  size_t m_difficultyWindow_v2;
-  size_t m_difficultyCut_v2;
-
   size_t m_maxBlockSizeInitial;
-  uint64_t m_maxBlockSizeGrowthSpeedNumeratorV2;
-  size_t m_maxBlockSizeAllowedEveryNBlock;
   uint64_t m_maxBlockSizeGrowthSpeedNumerator;
   uint64_t m_maxBlockSizeGrowthSpeedDenominator;
 
@@ -189,7 +190,6 @@ private:
   size_t m_fusionTxMinInputCount;
   size_t m_fusionTxMinInOutCountRatio;
 
-  uint32_t m_upgradeHeightMaxBlockSize;
   uint32_t m_upgradeHeightV2;
   uint32_t m_upgradeHeightV3;
   unsigned int m_upgradeVotingThreshold;
@@ -226,7 +226,6 @@ public:
 
   Transaction generateGenesisTransaction();
   Transaction generateGenesisTransaction(const std::vector<AccountPublicAddress>& targets);
-
   CurrencyBuilder& maxBlockNumber(uint32_t val) { m_currency.m_maxBlockHeight = val; return *this; }
   CurrencyBuilder& maxBlockBlobSize(size_t val) { m_currency.m_maxBlockBlobSize = val; return *this; }
   CurrencyBuilder& maxTxSize(size_t val) { m_currency.m_maxTxSize = val; return *this; }
@@ -237,11 +236,13 @@ public:
   CurrencyBuilder& blockFutureTimeLimit(uint64_t val) { m_currency.m_blockFutureTimeLimit = val; return *this; }
 
   CurrencyBuilder& moneySupply(uint64_t val) { m_currency.m_moneySupply = val; return *this; }
-  CurrencyBuilder& finalSubsidy(uint64_t val) { m_currency.m_finalSubsidy = val; return *this; }
   CurrencyBuilder& emissionSpeedFactor(unsigned int val);
   CurrencyBuilder& genesisBlockReward(uint64_t val) { m_currency.m_genesisBlockReward = val; return *this; }
 
   CurrencyBuilder& rewardBlocksWindow(size_t val) { m_currency.m_rewardBlocksWindow = val; return *this; }
+  CurrencyBuilder& zawyDifficultyBlockIndex(uint32_t val) { m_currency.m_zawyDifficultyBlockIndex = val; return *this; }
+  CurrencyBuilder& zawyDifficultyV2(size_t val) { m_currency.m_zawyDifficultyV2 = val; return *this; }
+  CurrencyBuilder& zawyDifficultyBlockVersion(uint8_t val) { m_currency.m_zawyDifficultyBlockVersion = val; return *this; }
   CurrencyBuilder& blockGrantedFullRewardZone(size_t val) { m_currency.m_blockGrantedFullRewardZone = val; return *this; }
   CurrencyBuilder& minerTxBlobReservedSize(size_t val) { m_currency.m_minerTxBlobReservedSize = val; return *this; }
 
@@ -251,16 +252,12 @@ public:
   CurrencyBuilder& defaultDustThreshold(uint64_t val) { m_currency.m_defaultDustThreshold = val; return *this; }
 
   CurrencyBuilder& difficultyTarget(uint64_t val) { m_currency.m_difficultyTarget = val; return *this; }
-  CurrencyBuilder& difficultyWindow(size_t val);  
-  CurrencyBuilder& difficultyWindowV2(size_t val);
+  CurrencyBuilder& difficultyWindow(size_t val);
   CurrencyBuilder& difficultyLag(size_t val) { m_currency.m_difficultyLag = val; return *this; }
   CurrencyBuilder& difficultyCut(size_t val) { m_currency.m_difficultyCut = val; return *this; }
-  CurrencyBuilder& difficultyCutV2(size_t val) { m_currency.m_difficultyCut_v2 = val; return *this; }
 
   CurrencyBuilder& maxBlockSizeInitial(size_t val) { m_currency.m_maxBlockSizeInitial = val; return *this; }
   CurrencyBuilder& maxBlockSizeGrowthSpeedNumerator(uint64_t val) { m_currency.m_maxBlockSizeGrowthSpeedNumerator = val; return *this; }
-  CurrencyBuilder& maxBlockSizeAllowedEveryNBlock(uint64_t val) { m_currency.m_maxBlockSizeAllowedEveryNBlock = val; return *this; }
-  CurrencyBuilder& maxBlockSizeGrowthSpeedNumeratorV2(uint64_t val) { m_currency.m_maxBlockSizeGrowthSpeedNumeratorV2 = val; return *this; }
   CurrencyBuilder& maxBlockSizeGrowthSpeedDenominator(uint64_t val) { m_currency.m_maxBlockSizeGrowthSpeedDenominator = val; return *this; }
 
   CurrencyBuilder& lockedTxAllowedDeltaSeconds(uint64_t val) { m_currency.m_lockedTxAllowedDeltaSeconds = val; return *this; }
@@ -274,7 +271,6 @@ public:
   CurrencyBuilder& fusionTxMinInputCount(size_t val) { m_currency.m_fusionTxMinInputCount = val; return *this; }
   CurrencyBuilder& fusionTxMinInOutCountRatio(size_t val) { m_currency.m_fusionTxMinInOutCountRatio = val; return *this; }
 
-  CurrencyBuilder& upgradeHeightMaxBlockSize(uint32_t val) { m_currency.m_upgradeHeightMaxBlockSize = val; return *this; }
   CurrencyBuilder& upgradeHeightV2(uint32_t val) { m_currency.m_upgradeHeightV2 = val; return *this; }
   CurrencyBuilder& upgradeHeightV3(uint32_t val) { m_currency.m_upgradeHeightV3 = val; return *this; }
   CurrencyBuilder& upgradeVotingThreshold(unsigned int val);

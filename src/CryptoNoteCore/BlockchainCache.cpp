@@ -206,7 +206,7 @@ void BlockchainCache::doPushBlock(const CachedBlock& cachedBlock,
   }
 
   logger(Logging::DEBUGGING) << "Added " << validatorState.spentKeyImages.size() << " spent key images";
-
+  
   if (!validatorState.spentMultisignatureGlobalIndexes.empty()) {
     auto& array = spentMultisigOutputsByBlock[blockIndex];
     array.reserve(array.size() + validatorState.spentMultisignatureGlobalIndexes.size());
@@ -644,8 +644,12 @@ uint32_t BlockchainCache::getTimestampLowerBoundBlockIndex(uint64_t timestamp) c
     return 0;
   }
 
-  uint32_t blockIndex = parent->getTimestampLowerBoundBlockIndex(timestamp);
-  return blockIndex == INVALID_BLOCK_INDEX ? blockIndex : startIndex;
+  try {
+    return parent->getTimestampLowerBoundBlockIndex(timestamp);
+  } catch (std::runtime_error&) {
+    // parent didn't have the block, so index.front() must be the block we're looking for
+    return startIndex;
+  }
 }
 
 bool BlockchainCache::getTransactionGlobalIndexes(const Crypto::Hash& transactionHash,
@@ -1124,11 +1128,11 @@ Difficulty BlockchainCache::getDifficultyForNextBlock() const {
 
 Difficulty BlockchainCache::getDifficultyForNextBlock(uint32_t blockIndex) const {
   assert(blockIndex <= getTopBlockIndex());
-  auto timestamps = getLastTimestamps(currency.difficultyBlocksCount(blockIndex), blockIndex, skipGenesisBlock);
+  uint8_t nextBlockMajorVersion = getBlockMajorVersionForHeight(blockIndex+1);
+  auto timestamps = getLastTimestamps(currency.difficultyBlocksCountByBlockVersion(nextBlockMajorVersion), blockIndex, skipGenesisBlock);
   auto commulativeDifficulties =
-      getLastCumulativeDifficulties(currency.difficultyBlocksCount(blockIndex), blockIndex, skipGenesisBlock);
-  return currency.nextDifficulty(currency.blockVersionByHeight(blockIndex),
-	  std::move(timestamps), std::move(commulativeDifficulties));
+      getLastCumulativeDifficulties(currency.difficultyBlocksCountByBlockVersion(nextBlockMajorVersion), blockIndex, skipGenesisBlock);
+  return currency.nextDifficulty(nextBlockMajorVersion, blockIndex, std::move(timestamps), std::move(commulativeDifficulties));
 }
 
 Difficulty BlockchainCache::getCurrentCumulativeDifficulty() const {
@@ -1182,7 +1186,7 @@ TransactionValidatorState BlockchainCache::fillOutputsSpentByBlock(uint32_t bloc
   for (auto it = range.first; it != range.second; ++it) {
     spentOutputs.spentKeyImages.insert(it->keyImage);
   }
-
+  
   auto it = spentMultisigOutputsByBlock.find(blockIndex);
   if (it != spentMultisigOutputsByBlock.end()) {
     std::copy(it->second.begin(), it->second.end(), std::inserter(spentOutputs.spentMultisignatureGlobalIndexes,
@@ -1203,6 +1207,13 @@ uint32_t BlockchainCache::getBlockIndexContainingTx(const Crypto::Hash& transact
   auto it = index.find(transactionHash);
   assert(it != index.end());
   return it->blockIndex;
+}
+
+uint8_t BlockchainCache::getBlockMajorVersionForHeight(uint32_t height) const {
+  UpgradeManager upgradeManager;
+  upgradeManager.addMajorBlockVersion(BLOCK_MAJOR_VERSION_2, currency.upgradeHeight(BLOCK_MAJOR_VERSION_2));
+  upgradeManager.addMajorBlockVersion(BLOCK_MAJOR_VERSION_3, currency.upgradeHeight(BLOCK_MAJOR_VERSION_3));
+  return upgradeManager.getBlockMajorVersion(height);
 }
 
 void BlockchainCache::fixChildrenParent(IBlockchainCache* p) {
